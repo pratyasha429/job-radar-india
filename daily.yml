@@ -1,0 +1,31 @@
+name: Daily refresh
+
+on:
+  schedule:
+    - cron: "30 1 * * *"      # 01:30 UTC = 07:00 IST, every day
+  workflow_dispatch:          # lets you also run it by hand from the Actions tab
+
+permissions:
+  contents: write             # needed so the job can save the updated database
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Fetch, dedupe, tag
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+        run: python run_pipeline.py
+      - name: Save updated database back to the repo
+        run: |
+          git config user.name "daily-bot"
+          git config user.email "daily-bot@users.noreply.github.com"
+          git add data/jobs.db
+          git diff --cached --quiet || (git commit -m "Daily refresh $(date -u +%F)" && git push)
